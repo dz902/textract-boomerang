@@ -1,0 +1,13 @@
+{
+    "name": "textract-boomerang",
+    "description": "tb",
+    "version": "0.0.1",
+    "private": true,
+    "dependencies": {
+    },
+    "devDependencies": {
+    },
+    "scripts": {
+    }
+}
+

@@ -1,0 +1,114 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  textract-boomerang
+Transform:
+- AWS::Serverless-2016-10-31
+
+#####
+
+Parameters:
+  LocalSourceBucketName:
+    Type: String
+    Default: tb-source
+  LocalTargetBucketName:
+    Type: String
+    Default: tb-target
+  GlobalSourceBucket:
+    Type: String
+    Default: textract-source
+  GlobalSourceBucketRegion:
+    Type: String
+    Default: us-east-1
+
+#####
+
+# Globals:
+#   Function:
+#     Environment:
+#       Variables:
+#         PROBLEMS_TABLE_NAME: !Ref ProblemsTable
+#     Timeout: 20
+
+#####
+
+Resources:
+  TbCreateS3PutPresignedUrl:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/tb-create-s3-put-presigned-url.handler
+      Runtime: nodejs12.x
+      MemorySize: 128
+      Timeout: 100
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TbStatusTable
+        - S3WritePolicy:
+            BucketName: !Ref LocalSourceBucketName
+      Environment:
+        Variables:
+          bucketName: !Ref LocalSourceBucketName
+          tableName: !Ref TbStatusTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /createPresignedURLs
+            Method: POST
+  TbUpdateStatus:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/tb-update-status.handler
+      Runtime: nodejs12.x
+      MemorySize: 128
+      Timeout: 100
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TbStatusTable
+      Environment:
+        Variables:
+          tableName: !Ref TbStatusTable
+          bucketName: !Ref LocalSourceBucketName
+      # Events:
+      #   FileProcessed:
+      #     Type: S3
+      #     Properties:
+      #       Bucket: !Ref LocalTargetBucketName
+      #       Events: s3:ObjectCreated:*
+  TbUploadToGlobal:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/tb-upload-to-global.handler
+      Runtime: nodejs12.x
+      MemorySize: 128
+      Timeout: 100
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref LocalSourceBucketName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TbStatusTable
+        - Statement: 
+            - Effect: "Allow"
+              Action: "ssm:GetParameters"
+              Resource: "*" # should change in real
+      Environment:
+        Variables:
+          tableName: !Ref TbStatusTable
+          globalSourceBucket: "textract-source" #!Ref GlobalSourceBucket
+          globalSourceBucketRegion: !Ref GlobalSourceBucketRegion
+      # Events:
+      #   FileUploaded:
+      #     Type: S3
+      #     Properties:
+      #       Bucket: !Ref LocalSourceBucketName
+      #       Events: s3:ObjectCreated:*
+  TbStatusTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: id
+        Type: String
+
+Outputs:
+  WebEndpoint:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"

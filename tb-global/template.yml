@@ -1,0 +1,105 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  textract-boomerang-global
+Transform:
+- AWS::Serverless-2016-10-31
+
+#####
+
+Parameters:
+  LocalTargetBucketName:
+    Type: String
+    Default: tb-target
+  LocalTargetBucketRegion:
+    Type: String
+    Default: cn-northwest-1
+  GlobalTargetBucketName:
+    Type: String
+    Default: textract-target
+
+#####
+
+# Globals:
+#   Function:
+#     Environment:
+#       Variables:
+#         PROBLEMS_TABLE_NAME: !Ref ProblemsTable
+#     Timeout: 20
+
+#####
+
+Resources:
+  TbTextractSnsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - textract.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AmazonTextractServiceRole"
+  TbTextractSnsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: AmazonTextract-tb-boomerang
+  TbFormsGetJob:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/tb-get-job.handler
+      Runtime: nodejs12.x
+      MemorySize: 128
+      Timeout: 100
+      Policies:
+        - Statement:
+            - Effect: "Allow"
+              Action: "ssm:GetParameters"
+              Resource: "*"
+        - Statement: # inline policy
+            - Effect: "Allow"
+              Action: "textract:GetDocumentAnalysis"
+              Resource: "*"
+        - Statement:
+            - Effect: "Allow"
+              Action: "s3:PutObject"
+              Resource: !Sub 'arn:${AWS::Partition}:s3:::${GlobalTargetBucketName}/*'
+      Environment:
+        Variables:
+          localTargetBucketName: !Ref LocalTargetBucketName
+          localTargetBucketRegion: !Ref LocalTargetBucketRegion
+          globalTargetBucketName: !Ref GlobalTargetBucketName
+      Events:
+        TextractSns:
+          Type: SNS
+          Properties:
+            Topic: !Ref TbTextractSnsTopic
+  TbFormsStartJob:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/handlers/tb-start-job.handler
+      Runtime: nodejs12.x
+      MemorySize: 128
+      Timeout: 100
+      Policies:
+        - Statement: # make scope smaller
+            - Effect: "Allow"
+              Action: "s3:*"
+              Resource: "*"
+        - Statement:
+            - Effect: "Allow"
+              Action: "textract:StartDocumentAnalysis"
+              Resource: "*"
+      Environment:
+        Variables:
+          textractSnsRoleArn: !GetAtt TbTextractSnsRole.Arn
+          textractSnsTopicArn: !Ref TbTextractSnsTopic
+      # Events:
+      #   FileProcessed:
+      #     Type: S3
+      #     Properties:
+      #       Bucket: !Ref LocalTargetBucketName
+      #       Events: s3:ObjectCreated:*

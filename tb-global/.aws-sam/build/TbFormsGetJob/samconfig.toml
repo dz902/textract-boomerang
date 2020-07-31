@@ -1,0 +1,12 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "tb-global"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-ii64d44zhkq7"
+s3_prefix = "tb-global"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "LocalTargetBucketName=\"tb-target\" LocalTargetBucketRegion=\"cn-northwest-1\" GlobalTargetBucketName=\"textract-target\""
+
